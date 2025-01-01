@@ -36,7 +36,6 @@ To use `flutter_crypto_security` in your Flutter project, follow these steps:
    import 'package:flutter_crypto_security/flutter_crypto_security.dart';
    ```
 
-For more information on how to use the package, check the [example](https://github.com/sudhi001/flutter_crypto_security/tree/main/example).
 
 ## Usage
 
