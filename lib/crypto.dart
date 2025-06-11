@@ -238,4 +238,33 @@ class Crypto {
 
     return Uint8List.fromList(outputBytes);
   }
+
+  /// Signs a message using a base64-encoded RSA private key. Returns the signature as Uint8List.
+  static Uint8List signWithPrivateKey(String privateKeyBase64, Uint8List message) {
+    final pemBytes = base64Decode(privateKeyBase64);
+    final pemString = String.fromCharCodes(pemBytes);
+    final parser = encrypt.RSAKeyParser();
+    final key = parser.parse(pemString);
+    if (key is! RSAPrivateKey) {
+      throw ArgumentError('Invalid RSA Private Key');
+    }
+    final signer = Signer("SHA-256/RSA");
+    signer.init(true, PrivateKeyParameter<RSAPrivateKey>(key));
+    final sig = signer.generateSignature(message) as RSASignature;
+    return sig.bytes;
+  }
+
+  /// Verifies a signature using a base64-encoded RSA public key. Returns true if valid.
+  static bool verifyWithPublicKey(String publicKeyBase64, Uint8List message, Uint8List signature) {
+    final pemBytes = base64Decode(publicKeyBase64);
+    final pemString = String.fromCharCodes(pemBytes);
+    final parser = encrypt.RSAKeyParser();
+    final key = parser.parse(pemString);
+    if (key is! RSAPublicKey) {
+      throw ArgumentError('Invalid RSA Public Key');
+    }
+    final signer = Signer("SHA-256/RSA");
+    signer.init(false, PublicKeyParameter<RSAPublicKey>(key));
+    return signer.verifySignature(message, RSASignature(signature));
+  }
 }
