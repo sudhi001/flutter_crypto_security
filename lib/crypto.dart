@@ -58,12 +58,18 @@ class Crypto {
       throw ArgumentError('Public key is required for encryption');
     }
 
-    // RSAEngine uses PKCS1 padding by default (RSA_PKCS1_PADDING)
-    // This is the correct and secure padding scheme for RSA encryption
+    // For RSA, we don't need block processing for small data like AES keys
+    // RSA can only encrypt data up to (key_size - padding_size) bytes
+    // For 2048-bit key with PKCS1 padding: 256 - 11 = 245 bytes max
+    if (message.length > 245) {
+      throw ArgumentError('Message too large for RSA encryption');
+    }
+
     final cipher = RSAEngine()
       ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
-    return _processBlocks(cipher, message);
+    // Direct encryption without block processing
+    return cipher.process(message);
   }
 
   /// Encrypts a [message] using the RSA public key with PKCS1 padding.
