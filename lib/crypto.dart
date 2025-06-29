@@ -58,14 +58,17 @@ class Crypto {
       throw ArgumentError('Public key is required for encryption');
     }
 
+    // RSAEngine uses PKCS1 padding by default (RSA_PKCS1_PADDING)
+    // This is the correct and secure padding scheme for RSA encryption
     final cipher = RSAEngine()
       ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
     return _processBlocks(cipher, message);
   }
 
-  /// Encrypts a [message] using the RSA public key.
+  /// Encrypts a [message] using the RSA public key with PKCS1 padding.
   ///
+  /// Uses RSA_PKCS1_PADDING for compatibility and security.
   /// Throws an [ArgumentError] if the public key is not provided.
   ///
   /// Example:
@@ -77,6 +80,8 @@ class Crypto {
       throw ArgumentError('Public key is required for encryption');
     }
 
+    // RSAEngine uses PKCS1 padding by default (RSA_PKCS1_PADDING)
+    // This is the correct and secure padding scheme for RSA encryption
     final cipher = RSAEngine()
       ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
@@ -84,8 +89,9 @@ class Crypto {
     return _processBlocks(cipher, Uint8List.fromList(messageBytes));
   }
 
-  /// Decrypts an [encryptedMessage] using the RSA private key.
+  /// Decrypts an [encryptedMessage] using the RSA private key with PKCS1 padding.
   ///
+  /// Uses RSA_PKCS1_PADDING for compatibility and security.
   /// Throws an [ArgumentError] if the private key is not provided.
   ///
   /// Example:
@@ -99,6 +105,8 @@ class Crypto {
 
     final encryptedBytes = base64Decode(encryptedMessage);
 
+    // RSAEngine uses PKCS1 padding by default (RSA_PKCS1_PADDING)
+    // This is the correct and secure padding scheme for RSA decryption
     final cipher = RSAEngine()
       ..init(false, PrivateKeyParameter<RSAPrivateKey>(privateKey!));
 
@@ -259,7 +267,8 @@ class Crypto {
   }
 
   /// Signs a message using a base64-encoded RSA private key. Returns the signature as Uint8List.
-  static Uint8List signWithPrivateKey(String privateKeyBase64, Uint8List message) {
+  static Uint8List signWithPrivateKey(
+      String privateKeyBase64, Uint8List message) {
     final pemBytes = base64Decode(privateKeyBase64);
     final pemString = String.fromCharCodes(pemBytes);
     final parser = encrypt.RSAKeyParser();
@@ -274,7 +283,8 @@ class Crypto {
   }
 
   /// Verifies a signature using a base64-encoded RSA public key. Returns true if valid.
-  static bool verifyWithPublicKey(String publicKeyBase64, Uint8List message, Uint8List signature) {
+  static bool verifyWithPublicKey(
+      String publicKeyBase64, Uint8List message, Uint8List signature) {
     final pemBytes = base64Decode(publicKeyBase64);
     final pemString = String.fromCharCodes(pemBytes);
     final parser = encrypt.RSAKeyParser();

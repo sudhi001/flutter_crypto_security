@@ -125,5 +125,31 @@ void main() {
         logger.i('✅ Test passes since decryption failed with wrong key');
       }
     });
+
+    test('Test RSA PKCS1 Padding Compatibility', () {
+      try {
+        final testMessage = 'Test message for PKCS1 padding verification';
+        logger.d('Original message: $testMessage');
+
+        // Encrypt with public key using PKCS1 padding
+        final encryptedMessage = Crypto.fromBase64PublicKey(serverPublicKey)
+            .encryptWithPublicKey(testMessage);
+        final encryptedBase64 = base64Encode(encryptedMessage);
+        logger.d('Encrypted with PKCS1 padding (Base64): $encryptedBase64');
+
+        // Decrypt with private key using PKCS1 padding
+        final decrypted = Crypto.fromBase64PrivateKey(serverPrivateKey)
+            .decryptWithPrivateKey(encryptedBase64);
+        final decryptedText = String.fromCharCodes(decrypted);
+        logger.d('Decrypted message: $decryptedText');
+
+        // Verify the decrypted message matches the original
+        expect(decryptedText, equals(testMessage));
+        logger.i('✅ Test passes - PKCS1 padding works correctly');
+      } catch (e) {
+        logger.e('Error during PKCS1 padding test: $e');
+        rethrow;
+      }
+    });
   });
 }

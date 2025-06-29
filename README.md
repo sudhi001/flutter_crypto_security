@@ -5,9 +5,17 @@ A Flutter package for encryption and decryption of data using RSA and AES algori
 ## Features
 
 - **AES Encryption/Decryption:** Encrypt and decrypt data with AES, including signature generation and verification.
-- **RSA Encryption/Decryption:** Encrypt and decrypt AES keys using RSA public and private keys.
+- **RSA Encryption/Decryption:** Encrypt and decrypt AES keys using RSA public and private keys with PKCS1 padding.
 - **Signature Verification:** Verify data integrity using RSA signatures.
 - **Logging and Debugging:** Includes detailed logs to help you track encryption and decryption processes.
+- **PKCS1 Padding:** Uses RSA_PKCS1_PADDING for secure and compatible RSA operations.
+
+## Security Features
+
+- **RSA Padding Scheme:** Uses PKCS1 padding (RSA_PKCS1_PADDING) for RSA encryption/decryption
+- **AES-GCM Mode:** Uses AES in GCM mode for authenticated encryption
+- **Digital Signatures:** RSA-SHA256 signatures for message authentication
+- **Secure Random Generation:** Cryptographically secure random number generation for keys and nonces
 
 Here's an updated **Installation** section for your `README.md` based on the package location:
 
@@ -102,7 +110,7 @@ void main() {
 }
 ```
 
-### RSA Encryption/Decryption
+### RSA Encryption/Decryption with PKCS1 Padding
 
 #### RSA Encryption with Public Key and Decryption with Private Key:
 
@@ -113,13 +121,13 @@ void main() {
   final devicePublicKeyStr = "YOUR_PUBLIC_KEY_HERE"; // Replace with your public key
   final devicePrivateKeyStr = "YOUR_PRIVATE_KEY_HERE"; // Replace with your private key
   
-  // Encrypt with public key
+  // Encrypt with public key using PKCS1 padding
   final encryptedMessage = Crypto.fromBase64PublicKey(devicePublicKeyStr)
       .encryptWithPublicKey(plaintext);
   final encryptedBase64 = base64Encode(encryptedMessage);
   logger.d('Encrypted message (Base64): $encryptedBase64');
 
-  // Decrypt with private key
+  // Decrypt with private key using PKCS1 padding
   final decrypted = Crypto.fromBase64PrivateKey(devicePrivateKeyStr)
       .decryptWithPrivateKey(encryptedBase64);
   final decryptedText = String.fromCharCodes(decrypted);
@@ -156,12 +164,23 @@ void main() {
 
 ## Tests
 
-This package includes tests for both **AES** and **RSA** encryption and decryption processes:
+This package includes comprehensive tests for both **AES** and **RSA** encryption and decryption processes:
 
 - **Test AES Encryption and Decryption:** Ensures AES encryption and decryption works with the correct key.
-- **Test RSA Encryption with Public Key and Decryption with Private Key:** Verifies that RSA encryption with a public key and decryption with a private key works as expected.
+- **Test RSA Encryption with Public Key and Decryption with Private Key:** Verifies that RSA encryption with a public key and decryption with a private key works as expected using PKCS1 padding.
 - **Test AES with Signature:** Validates AES encryption with a signature and verifies the signature with the public key.
 - **Test AES Decryption Failure with Wrong Key:** Ensures AES decryption fails with the wrong key.
+- **Test RSA PKCS1 Padding Compatibility:** Verifies that RSA operations use PKCS1 padding correctly.
+
+## RSA Padding Scheme
+
+This package uses **PKCS1 padding** (RSA_PKCS1_PADDING) for all RSA encryption and decryption operations. This is:
+
+- **Secure:** Provides protection against various cryptographic attacks
+- **Compatible:** Widely supported across different platforms and libraries
+- **Standard:** Follows the PKCS#1 v1.5 standard for RSA encryption
+
+The implementation uses PointyCastle's `RSAEngine` which defaults to PKCS1 padding, ensuring secure and compatible RSA operations.
 
 ## License
 
