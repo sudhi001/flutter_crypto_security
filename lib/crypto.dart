@@ -55,7 +55,7 @@ class Crypto {
   }
 
   /// Encrypts a Uint8List using the RSA public key with PKCS1 padding.
-  /// This is the CORRECT method for RSA encryption - no block processing needed.
+  /// This method uses the encrypt package's RSA implementation for better compatibility.
   ///
   /// Example:
   /// ```dart
@@ -65,39 +65,82 @@ class Crypto {
     if (publicKey == null) {
       throw ArgumentError('Public key is required for encryption');
     }
+
     print('🔍 RSA Debug Info:');
     print('  - Message length: ${message.length}');
     print('  - Public key modulus length: ${publicKey!.modulus!.bitLength}');
     print('  - Public key exponent: ${publicKey!.exponent}');
     print(
-        '  - Message (hex): ${message.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}');
+      '  - Message (hex): ${message.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}',
+    );
 
-    if (message.length > 245) {
-      throw ArgumentError('Message too large for RSA encryption');
+    // Calculate the correct block size (modulus length in bytes)
+    final blockSize = (publicKey!.modulus!.bitLength + 7) ~/ 8;
+    print('  - Block size: $blockSize');
+
+    if (message.length > blockSize - 11) {
+      throw ArgumentError(
+        'Message too large for RSA encryption. Max: ${blockSize - 11}, Got: ${message.length}',
+      );
     }
 
-    // Use pure PointyCastle with explicit PKCS1 padding
+    // OPTION 1: Use encrypt package's RSA implementation (RECOMMENDED)
+    try {
+      print('  - Using encrypt package RSA method');
+      final encrypter = encrypt.Encrypter(encrypt.RSA(publicKey: publicKey!));
+
+      // Convert Uint8List to base64 string for encrypt package
+      final messageBase64 = base64Encode(message);
+      final encrypted = encrypter.encrypt(messageBase64);
+      final encryptedBytes = base64Decode(encrypted.base64);
+
+      print('  - Encrypted length: ${encryptedBytes.length}');
+      print('  - First few bytes: ${encryptedBytes.take(10).toList()}');
+
+      return encryptedBytes;
+    } catch (e) {
+      print('  - Encrypt package failed: $e');
+      print('  - Falling back to manual PKCS1 padding');
+
+      // OPTION 2: Manual PKCS1 padding with PointyCastle
+      return _encryptWithManualPKCS1Padding(message, blockSize);
+    }
+  }
+
+  /// Manual PKCS1 v1.5 padding implementation
+  Uint8List _encryptWithManualPKCS1Padding(Uint8List message, int blockSize) {
     final cipher = RSAEngine();
     cipher.init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
-    // Create PKCS1 v1.5 padding manually
-    final paddedMessage = Uint8List(245);
+    // Create PKCS1 v1.5 padding
+    final paddedMessage = Uint8List(blockSize);
     paddedMessage[0] = 0x00; // Leading zero
     paddedMessage[1] = 0x02; // PKCS1 v1.5 padding type
 
     // Fill with random non-zero bytes
     final random = Random.secure();
-    for (int i = 2; i < 245 - message.length - 1; i++) {
+    final paddingLength = blockSize -
+        message.length -
+        3; // 3 = leading zero + padding type + separator
+
+    for (int i = 2; i < 2 + paddingLength; i++) {
       do {
         paddedMessage[i] = random.nextInt(256);
       } while (paddedMessage[i] == 0);
     }
 
-    paddedMessage[245 - message.length - 1] = 0x00; // Separator
+    paddedMessage[2 + paddingLength] = 0x00; // Separator
     paddedMessage.setRange(
-        245 - message.length, 245, message); // Actual message
+      2 + paddingLength + 1,
+      blockSize,
+      message,
+    ); // Actual message
 
-    return cipher.process(paddedMessage);
+    final encrypted = cipher.process(paddedMessage);
+    print('  - Manual PKCS1 encrypted length: ${encrypted.length}');
+    print('  - Manual PKCS1 first few bytes: ${encrypted.take(10).toList()}');
+
+    return encrypted;
   }
 
   /// Encrypts a string message using the RSA public key with PKCS1 padding.
@@ -113,17 +156,7 @@ class Crypto {
     }
 
     final messageBytes = utf8.encode(message);
-
-    // Check if message is too large for RSA
-    if (messageBytes.length > 245) {
-      throw ArgumentError('Message too large for RSA encryption');
-    }
-
-    // Use the same direct encryption method as encryptWithUint8ListPublicKey
-    final cipher = RSAEngine()
-      ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
-
-    return cipher.process(Uint8List.fromList(messageBytes));
+    return encryptWithUint8ListPublicKey(Uint8List.fromList(messageBytes));
   }
 
   /// Decrypts an encrypted message using the RSA private key with PKCS1 padding.
