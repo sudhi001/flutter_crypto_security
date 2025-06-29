@@ -407,23 +407,36 @@ class Crypto {
 
   /// Decrypts a server response using the server's private key
   /// This method decrypts the response that was encrypted by the Go server
+  /// Decrypts a server response using the server's private key
+  /// This method decrypts the response that was encrypted by the Go server
   static Map<String, dynamic> decryptResponse(
-    String encryptedKey,
-    String encryptedPayload,
-    String nonce,
+    Map<String, dynamic> response,
     String serverPrivateKeyBase64,
   ) {
     try {
-      // Step 1: Create crypto instance with server's private key
+      print('🔓 Starting decryption of server response...');
+
+      final encryptedKey = response['key'] as String; // base64 string
+      final encryptedPayload = response['payload'] as String; // base64 string
+      final nonce = response['nonce'] as String; // base64 string
+
+      print('�� Received encrypted data:');
+      print('   Key length: ${encryptedKey.length}');
+      print('   Payload length: ${encryptedPayload.length}');
+      print('   Nonce length: ${nonce.length}');
+
+      // 1. Create crypto instance with server's private key
       final crypto = Crypto.fromBase64PrivateKey(serverPrivateKeyBase64);
 
-      // Step 2: Decrypt the AES key using RSA private key
+      // 2. Decrypt AES key with RSA private key
       final decryptedAESKeyBytes = crypto.decryptWithPrivateKey(encryptedKey);
+      print('🔓 Decrypted AES key length: ${decryptedAESKeyBytes.length}');
 
-      // Step 3: Handle base64-encoded AES key (if server sends it that way)
+      // 3. Handle base64-encoded AES key (if server sends it that way)
       Uint8List finalAESKey;
       if (decryptedAESKeyBytes.length == 44) {
         // Server sends base64-encoded AES key
+        print('🔍 Detected base64-encoded AES key, decoding...');
         final decodedKey =
             base64Decode(String.fromCharCodes(decryptedAESKeyBytes));
         if (decodedKey.length != 32) {
@@ -431,27 +444,36 @@ class Crypto {
               'Invalid decoded AES key length: ${decodedKey.length}');
         }
         finalAESKey = decodedKey;
+        print('✅ Successfully decoded base64 AES key to 32 bytes');
       } else if (decryptedAESKeyBytes.length == 32) {
         // Server sends raw AES key
         finalAESKey = decryptedAESKeyBytes;
+        print('✅ Using raw 32-byte AES key');
       } else {
         throw Exception(
             'Unexpected AES key length: ${decryptedAESKeyBytes.length}');
       }
 
-      // Step 4: Decrypt the payload using AES with the nonce
+      // 4. Decrypt the payload using AES with the nonce
       final decryptedPayload = Crypto.decryptWithAESGCM(
         finalAESKey,
         encryptedPayload,
         nonce, // This is the base64-encoded nonce string
       );
 
-      // Step 5: Parse the JSON response
+      print(
+          '🔓 Successfully decrypted payload, length: ${decryptedPayload.length}');
+      print(
+          '📄 Decrypted payload preview: ${decryptedPayload.substring(0, decryptedPayload.length > 100 ? 100 : decryptedPayload.length)}...');
+
+      // 5. Parse the JSON response
       final responseData = jsonDecode(decryptedPayload) as Map<String, dynamic>;
+      print(
+          '✅ Successfully parsed JSON response with ${responseData.length} fields');
 
       return responseData;
     } catch (e) {
-      print('Error decrypting server response: $e');
+      print('❌ Error decrypting server response: $e');
       rethrow;
     }
   }
