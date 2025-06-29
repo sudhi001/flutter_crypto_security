@@ -357,4 +357,123 @@ class Crypto {
     signer.init(false, PublicKeyParameter<RSAPublicKey>(key));
     return signer.verifySignature(message, RSASignature(signature));
   }
+
+  Future<Map<String, dynamic>> encryptPayload({
+    required String publicKey,
+    required Map<String, dynamic> payload,
+  }) async {
+    print('===========encryption==========');
+    // Add this to your Flutter encryption function
+    print('🔑 Fresh Public Key from API: $publicKey');
+    print(
+        '🔑 Public Key Hash: ${publicKey.hashCode}'); // To verify it's different each time
+    final publicKeyE = String.fromCharCodes(base64Decode(publicKey));
+    // In your encryptPayload function, add this logging:
+    print('🔑 Using Public Key: $publicKeyE');
+
+    final plainText = json.encode(payload);
+    print('🔑Generating Random Key in Dart...');
+    final randomKey = Crypto.generateRandomBytes(32); // 256-bit AES key
+    print('🔐  Encrypting Random Key using RSA public key...');
+    final encryptedKey = Crypto.fromBase64PublicKey(publicKey)
+        .encryptWithUint8ListPublicKey(randomKey);
+    final encryptedKeyBase64 = base64Encode(encryptedKey);
+
+    print("Encrypted key length: ${encryptedKey.length}");
+    print("First few bytes: ${encryptedKey.take(10).toList()}");
+    print("Encrypted key (base64): $encryptedKeyBase64"); // <-- Add this line
+
+    final nonce = Crypto.generateNonce();
+    final encryptedPayload = Crypto.encryptWithAES(
+      randomKey,
+      nonce,
+      Uint8List.fromList(utf8.encode(plainText)),
+    );
+    print('✅ Plaintext encrypted with AES successfully');
+    print('   Encrypted Payload (base64): ${encryptedPayload.$1}');
+    print('   Nonce (base64): ${encryptedPayload.$2}');
+
+    print('📦  Building JSON with encrypted data...');
+    final jsonData = {
+      'payload': encryptedPayload.$1,
+      'key': encryptedKeyBase64,
+      'nonce': encryptedPayload.$2,
+    };
+    final jsonString = jsonEncode(jsonData);
+    print('✅ JSON built successfully');
+    print('   JSON Data: $jsonString');
+    return jsonData;
+  }
+
+
+  /// Decrypts a server response using the server's private key
+  /// This method decrypts the response that was encrypted by the Go server
+  static Map<String, dynamic> decryptResponse(
+    String encryptedKey,
+    String encryptedPayload,
+    String nonce,
+    String serverPrivateKeyBase64,
+  ) {
+    try {
+      // Step 1: Create crypto instance with server's private key
+      final crypto = Crypto.fromBase64PrivateKey(serverPrivateKeyBase64);
+      
+      // Step 2: Decrypt the AES key using RSA private key
+      final decryptedAESKeyBytes = crypto.decryptWithPrivateKey(encryptedKey);
+      
+      // Step 3: Handle base64-encoded AES key (if server sends it that way)
+      Uint8List finalAESKey;
+      if (decryptedAESKeyBytes.length == 44) {
+        // Server sends base64-encoded AES key
+        final decodedKey = base64Decode(String.fromCharCodes(decryptedAESKeyBytes));
+        if (decodedKey.length != 32) {
+          throw Exception('Invalid decoded AES key length: ${decodedKey.length}');
+        }
+        finalAESKey = decodedKey;
+      } else if (decryptedAESKeyBytes.length == 32) {
+        // Server sends raw AES key
+        finalAESKey = decryptedAESKeyBytes;
+      } else {
+        throw Exception('Unexpected AES key length: ${decryptedAESKeyBytes.length}');
+      }
+      
+      
+      // Step 4: Decrypt the payload using AES with the nonce
+      final decryptedPayload = Crypto.decryptWithAES(
+        finalAESKey,
+        encryptedPayload,
+        nonce, // This is the base64-encoded nonce string
+      );
+      
+      // Step 5: Parse the JSON response
+      final responseData = jsonDecode(decryptedPayload) as Map<String, dynamic>;
+      
+      return responseData;
+    } catch (e) {
+      print('Error decrypting server response: $e');
+      rethrow;
+    }
+  }
+
+  /// Decrypts [cipherText] with AES using the provided [key] and [nonceText].
+  /// This method properly uses the nonce for AES-GCM decryption.
+  static String decryptWithAES(
+    Uint8List key,
+    String cipherText,
+    String nonceText, // This should be base64-encoded nonce
+  ) {
+    final ciphertextBytes = base64Decode(cipherText);
+    final nonce = base64Decode(nonceText); // Decode the nonce here
+
+    final gcm = GCMBlockCipher(
+      AESEngine(),
+    )..init(false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
+
+    final plaintextBytes = gcm.process(ciphertextBytes);
+
+    return String.fromCharCodes(plaintextBytes);
+  }
+}
+
+
 }
