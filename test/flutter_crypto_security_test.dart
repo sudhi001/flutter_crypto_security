@@ -151,5 +151,42 @@ void main() {
         rethrow;
       }
     });
+
+    test('Decrypt Real Server Response', () {
+      try {
+        // The response data provided by the user
+        final responseData = {
+          'Payload':
+              '/uNtQlCaHUfLnqx7ML4HbtzwDhzA+9g6p/nlTI8mFHcJDeVX3ZfZIKgs2iH6e1lAMaMcKoYnWAZfdDLMTrWj69tx6VKK9eL2bI9MfNWmgTwJZXeOWQPQreXhzvbeTlzUcPtD9jvU23Q4dzgyNwvtibC9IVp/lVKZ/ERzy6G4vZ9dmeyMosTxaC95ytfW+4HSuZC3fnT/QPB7KydfS5zwh9rUBympku2wkW4hUdBIkd6pJpsyCHe53nfZUrUVNBFVmi6gLDulGeQPiZ1FjGnDjHnyDwJ+lpbT3554sVIfFPCq3uUdW0amZEu0vyC2CT8pSi7CPOtjSgufKdKl+Mb1WcEW59U+oqvXllg1p4oyfhamyutUNq+eAvsubMCzIbpAWOP59Vm8AeJMLGYU1Y1Crk9L/oqpdJJt2MhtnWjqZil9MQwzjgx6JGmy2pOk7pgS9+w4ufHKE2lhgOTQkryzdQpbHfbTEY5hw5m//v4Qdd9pMYSTLeyvhfXExQBfdUpwUPBjKoMIi6gZEyAPWlE2oKM6g4wDyoFSzA5vOz0d6wbeHw3Kr9qNLxT1URXdZYW7mmG/iZWQt+tGtyUgyEtKgRhvXKYX3JGEfQBUnmoH83KRw6O8JHWWtmJTWmA3FCjVIKDcSvvKoTXzILhtmZ5Wvzr+KQQlR1kOPC1lOxIRYa0smmFM0r8PJAI9ovvD1NPIErxQ/mx8TWHE4U9DAPk8c9U5PC/hGoX1E6WWMeOWn7jA5BLB6+IQe4ef/AO6fvS4mWwpFARNdC5yB55TXLQi6PolKicxa2tCXd/gD/0N8e9vYGZ3LLu3sUaCGtXz4BT8aUucZRy/+5qj31sQs1S1D07HHCFCH+epKqRF0TeNycroKCACdO1ZckbzDcYMblwhadLpyy853fM0hxnerMhqhUxwX3FEue5GR1nSdmrpObnMQ6tOi2b4zFjK2x6ShttA1596Jti53rRn9ltCElM8QpvFrx5OYnBCkVQgnxMBlzgaDHpi3MrgTVTOCJSSUJDaSJ9lj+H1eKXUHVyhjy0RMXbC66d88ecwtkhWQLv9lPrEQ3vq/yITfXfh3/dpdpuxpsYEKt3m31as0y0ONtPRAQ18X9iWGMGWUibRtxATKHzPeCx1RwUOlSrwbPoh2gGpA/bj3bAUIujs0UH+O4GYS2ZYabKH9HP/0oQ4BPNjTNlios5Z8z/m41gmliR6mx0Zd24kGg4GstNG6c50QIe/J9jf9xhn9uzElrPfW/bMYwPpVFv4kiM9SAh8VGT0PDkycCUDH/yOKkO2m4OR7H8RsnbbCTFQIH4GsQFLq/MMR35IHomR9gXVE825tmwhrgw2DtURRbNHtF38LF6NoO8DjoinUFOrmbMKudBbQbobg5cVCzUPrr8OWdR5B19KrwLkuliaGh+ll//3KTdJLz7Ntlz91daE4oVtH/2kTg8Zw3hAXd/TgFW49OoRbWRPM2isooz5fECniFZOwm3/KE8DIU7gMYiXP5ZJwkfm2sH1tw==',
+          'Key':
+              'tvZgHRj4ICqAa1YmgW1Ht7zw1SdR2hg3BhMvdxPcFDm0/3kG4xRRT3V0B+BclqljRLKIuVBsdVOIWCjnUrMvB0aXEXZUPIMci0IeBkKFd++gdwieLKONeJMEGiuQqDuxJUvTvjVEBM2EbQ6uh1LsbT4+XhQctlITIA0TNNSAgJ3uMgyG82R/+q37ZIZxJFCZpWqjctk79YKUHih9WiPrcwEvzVGsr3utOnkrZngEqkeEAeGi5DDu5UHOT7EHPAgTAPFGg/wuiue1N/PoA/QhSPYnusC2vtiCZo69usc3tiqdsLhwLgusOOHxLg6KSZifww8jrgBZmJHxXh7/+PYB1w==',
+          'Nonce': 'yok6ogjvWG24NeMD'
+        };
+
+        // Server's private key for testing
+        const String serverPrivateKeyBase64 =
+            "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBeTF5MDJZSHlqOENXcy9CaHlyZTFKMnBYaGlpLzVBRkdrZzNRZEltbGNWMWx2UnRtClRNUGpkWHNZYWtodi9RZUdKbzFFRUxtRWE5L1gvUm9xUzd2QWJ5S3A2SVJxYU1LQys5QUpJL1UzdjdmWTN1UzQKZEgySlFZaGh1WHVqb2xLak5HODBvd2pvK3drN1UwSy9qYVlGSWtvMjFZbTZVSFBuSVZFWHh4cTVSb2h3eFF2VApwZVlRdk1Yald0THdwKy9xQmZCOG5CK2MrSVBPVVhyeDdPdDQ2OERwU2x6T0NjR3c3azgzK1lFMTc3OElIRGJOCk5HamQyWGZwMzNMNHFVdytFSWE1U09qcllTRG5iU3E5Sk5XeGhITHgrLzAyZ0NycWFLOENoRXFZMGErTW9qWlMKSS9uS0Y3MVpMSFdsKzh6cUJOZUZEcWFSY25iRXVHYTAvSC83SlFJREFRQUJBb0lCQUV5T1ZGaXpoanhlbkgwVgp4OEs0UUw2YlZtS2ZjWW1rZjB3WlhqbVkzY3JkQmFGWXNMekNXNTBNMzRhWFNXMWdTVHkzSG9JTFROSU5YUEtmCnlIOWxLVTdOSmxodGpOOXVKa0FrczJReGVyQzJSYkszT01kRndRZUdEMy96andqYkFpeUpscSt2ZVlHVG1wMC8KK2Z1Wm5jSW9YUmNyTjVQMDVmUlJZbG1tY2t3ZUFrUDRFUEpGQXhuVGNFUHJpNE5MenEwekMrd0s4clBOSWN1bgpYWW02U2lwbC9kdlJHNkFaMC8wVDRxc244YlFCaVljY1FvMHFaNnZ5Qk9qU0JGMUFNZ3F1bm9NVTU2R0ZZNDlECkJyNHRDN1dzTDJaMDdEYzBnNndqeHZ5ZVR3UGFCdXpxMGY0ZjdySnBaTjZVeFJZRUkzM1cxN1lIVlZjb0d1VFoKTS9tSmdyc0NnWUVBNXd5Z0dFaFJzRWRrSnlmU0NuQ0VjVFVNZE1VVVB5b1M0NG4ySHNGMnd4Vkp2cGZKUUttcgo1Rm8wMlZLdXI2LzAxZWtJZy9VVHNCdlROcTk5azlSM0dDTnJYbllZZlA0cVdlR3JkNGlMbzJndVZXZHEyQlduCnhZVW5HZFlJdVVEZE9COTVpSTZpSU9MMVpQclhwWEc0dG5sajBuNnhQKy9rRTljNGFOcGRTWThDZ1lFQTRWS3EKdk9uUHB5dDRmVkh1b3pwN2tqVHlrUTVPRXNzUXQ0MjNPeTVua2R4cmZhQ1czanNZRGhpQy9KYnVDSmVYaXlwSgpDTitSNUhHZjBHOUtsa0dlR3BJUUtYQzg0cGpqaFpoV1JRMmpNYjJURjZYRVp0bkgxNHE3RENORFd4R0kxNHN6CnRpOXo0dS9FWGE0VWU1QkVIVEcrdG5ocDlIOGc3ZW5zQW93SURnc0NnWUVBd3VSYWNzRWw3c3o1aFRISXNiZWgKY0NDd1Joc3JiZkJlaUlLS0VmMWM0VWVtc2RjMUVvOU1pRTB6QVJJR2VmbXhTM0xMRlF2NE5IZjBITS9BM0o2KwphcVVOMzFzOFlzcStESjBYMXJkZUdsTTVxaDZXK0hpajBTLzFBSTBUUkxpYklja2k2Zlp1ZWRFWDc3ckxoaW04CkJtZTB0UXpiRkxTVXJjdkFNR25wZ0s4Q2dZQms1NlZvaG5pa3ozWGRBV1VTR2kyZWt6R1J2a3MrWlV2dU4zdTMKK0JjUG5odFJIaXFTQ1ByRHpUeFRxNitiajIraE5lV1JJTFh3RE9aWjdJMEZid3REc09lbDkwUFBZbEo1MEhmSgo0c3FUaXVjbGJ1bmVlV2JpWXRGVEpUT1R3KzE1UVhCK0JSQXJyOTVMYVpyb252bXg3VVlQNXlya0FFNlozT2tCClZ2NkFjd0tCZ0JDUnZob21XaDVyeE1xa3RCdWlTekhaNStVT2d0by9LMzJNM0xPQnhrSU41WlZ4RDVsd2J4WGUKN1h3QUZuUzFCMWRkbUhaQXNGTGFObUFyb0hBVFpQcU40NzM3M1EyZXR6aGg5OExjNnRBZUM4NkYrUGVVUWUrdQpMUFBLaTc2VzNHOGhhVG5oeHlKcXhaRmZrcTd5T2E1TGRvdkx6V3JKVUtJRWV4VXZBVnFCCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg==";
+
+        logger.d('🔓 Starting decryption of real server response...');
+
+        // Decrypt the response using the server's private key
+        final decryptedData =
+            Crypto.decryptResponse(responseData, serverPrivateKeyBase64);
+
+        logger.d('✅ Successfully decrypted server response!');
+        logger.d('📄 Decrypted data: $decryptedData');
+
+        // Verify the decrypted data contains expected fields
+        expect(decryptedData, isA<Map<String, dynamic>>());
+        expect(decryptedData['Code'], equals('118'));
+        expect(decryptedData['Name'], isA<String>());
+        expect(decryptedData['Duration'], equals(12));
+
+        logger.i('✅ Test passes - Real server response decrypted successfully');
+      } catch (e) {
+        logger.e('Error decrypting real server response: $e');
+        rethrow;
+      }
+    });
   });
 }

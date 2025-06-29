@@ -405,7 +405,7 @@ class Crypto {
     final plainText = json.encode(payload);
     print('🔑Generating Random Key in Dart...');
     final randomKey = Crypto.generateRandomBytes(32); // 256-bit AES key
-    print('��  Encrypting Random Key using RSA public key...');
+    print('🔑  Encrypting Random Key using RSA public key...');
     final encryptedKey = Crypto.fromBase64PublicKey(publicKey)
         .encryptWithUint8ListPublicKey(randomKey);
     final encryptedKeyBase64 = base64Encode(encryptedKey);
@@ -436,6 +436,22 @@ class Crypto {
     return jsonData;
   }
 
+  /// Helper to strip PKCS1 v1.5 padding from decrypted RSA output
+  static Uint8List _stripPKCS1Padding(Uint8List padded) {
+    if (padded.length < 12 || padded[0] != 0x00 || padded[1] != 0x02) {
+      throw Exception('Invalid PKCS1 padding');
+    }
+    // Find the 0x00 separator after padding
+    int i = 2;
+    while (i < padded.length && padded[i] != 0x00) {
+      i++;
+    }
+    if (i == padded.length) {
+      throw Exception('Invalid PKCS1 padding: no separator found');
+    }
+    return padded.sublist(i + 1);
+  }
+
   /// Decrypts a server response using the server's private key
   /// This method decrypts the response that was encrypted by the Go server
   static Map<String, dynamic> decryptResponse(
@@ -448,13 +464,19 @@ class Crypto {
       // Debug the private key being used
       print(
           '🔑 Private key being used: ${serverPrivateKeyBase64.substring(0, 100)}...');
-      print('�� Private key length: ${serverPrivateKeyBase64.length}');
+      print('🔑 Private key length: ${serverPrivateKeyBase64.length}');
 
-      final encryptedKey = response['key'] as String; // base64 string
-      final encryptedPayload = response['payload'] as String; // base64 string
-      final nonce = response['nonce'] as String; // base64 string
+      // Handle both uppercase and lowercase field names
+      final encryptedKey = (response['key'] ?? response['Key']) as String?;
+      final encryptedPayload =
+          (response['payload'] ?? response['Payload']) as String?;
+      final nonce = (response['nonce'] ?? response['Nonce']) as String?;
 
-      print('�� Received encrypted data:');
+      if (encryptedKey == null || encryptedPayload == null || nonce == null) {
+        throw Exception('Missing required fields: key, payload, or nonce');
+      }
+
+      print('🔓 Received encrypted data:');
       print('   Key length: ${encryptedKey.length}');
       print('   Payload length: ${encryptedPayload.length}');
       print('   Nonce length: ${nonce.length}');
@@ -463,14 +485,33 @@ class Crypto {
       final crypto = Crypto.fromBase64PrivateKey(serverPrivateKeyBase64);
 
       // 2. Decrypt AES key with RSA private key
-      final decryptedAESKeyBytes = crypto.decryptWithPrivateKey(encryptedKey);
-      print('🔓 Decrypted AES key length: ${decryptedAESKeyBytes.length}');
+      final decryptedAESKeyBytesRaw =
+          crypto.decryptWithPrivateKey(encryptedKey);
       print(
-          '🔓 Raw decrypted bytes (hex): ${decryptedAESKeyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}');
+          '🔓 Decrypted AES key (raw, with padding) length: ${decryptedAESKeyBytesRaw.length}');
+      print(
+          '🔓 Raw decrypted bytes (hex): ${decryptedAESKeyBytesRaw.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}');
 
-      // 3. Handle base64-encoded AES key (if server sends it that way)
-      Uint8List finalAESKey;
-      if (decryptedAESKeyBytes.length == 44) {
+      // 3. Try to strip PKCS1 v1.5 padding, fallback to raw if not present
+      Uint8List decryptedAESKeyBytes;
+      try {
+        decryptedAESKeyBytes = _stripPKCS1Padding(decryptedAESKeyBytesRaw);
+        print(
+            '🔓 Decrypted AES key (unpadded) length: ${decryptedAESKeyBytes.length}');
+        print(
+            '🔓 Unpadded bytes (hex): ${decryptedAESKeyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}');
+      } catch (e) {
+        print(
+            '⚠️ PKCS1 padding not detected, using raw decrypted bytes as AES key');
+        decryptedAESKeyBytes = decryptedAESKeyBytesRaw;
+      }
+
+      // 4. Use 32-byte result directly, else brute-force
+      Uint8List? finalAESKey;
+      if (decryptedAESKeyBytes.length == 32) {
+        finalAESKey = decryptedAESKeyBytes;
+        print('✅ Using 32-byte AES key after PKCS1 padding removal');
+      } else if (decryptedAESKeyBytes.length == 44) {
         // Server sends base64-encoded AES key
         print('🔍 Detected base64-encoded AES key, decoding...');
         final decodedKey =
@@ -481,16 +522,53 @@ class Crypto {
         }
         finalAESKey = decodedKey;
         print('✅ Successfully decoded base64 AES key to 32 bytes');
-      } else if (decryptedAESKeyBytes.length == 32) {
-        // Server sends raw AES key
-        finalAESKey = decryptedAESKeyBytes;
-        print('✅ Using raw 32-byte AES key');
       } else {
-        throw Exception(
-            'Unexpected AES key length: ${decryptedAESKeyBytes.length}');
+        print(
+            '⚠️ AES key after PKCS1 padding removal is not 32 bytes (got ${decryptedAESKeyBytes.length}). Brute-forcing 32-byte windows...');
+        final totalWindows = decryptedAESKeyBytes.length - 31;
+        for (int i = 0; i <= decryptedAESKeyBytes.length - 32; i++) {
+          final candidate = decryptedAESKeyBytes.sublist(i, i + 32);
+          try {
+            final decryptedPayload = Crypto.decryptWithAESGCM(
+              candidate,
+              encryptedPayload,
+              nonce,
+            );
+            print('✅ SUCCESS! Window $i worked as AES key');
+            print('   Decrypted payload: $decryptedPayload');
+            finalAESKey = candidate;
+            break;
+          } catch (_) {}
+        }
+        if (finalAESKey == null) {
+          // Also try 44-byte base64 windows
+          for (int i = 0; i <= decryptedAESKeyBytes.length - 44; i++) {
+            final candidate = decryptedAESKeyBytes.sublist(i, i + 44);
+            try {
+              final decoded = base64Decode(String.fromCharCodes(candidate));
+              if (decoded.length == 32) {
+                try {
+                  final decryptedPayload = Crypto.decryptWithAESGCM(
+                    decoded,
+                    encryptedPayload,
+                    nonce,
+                  );
+                  print('✅ SUCCESS! Base64 window $i worked as AES key');
+                  print('   Decrypted payload: $decryptedPayload');
+                  finalAESKey = decoded;
+                  break;
+                } catch (_) {}
+              }
+            } catch (_) {}
+          }
+        }
+        if (finalAESKey == null) {
+          throw Exception(
+              'No valid AES key found in any 32-byte or 44-byte window of the decrypted RSA block');
+        }
       }
 
-      // 4. Decrypt the payload using AES with the nonce
+      // 5. Decrypt the payload using AES with the nonce
       final decryptedPayload = Crypto.decryptWithAESGCM(
         finalAESKey,
         encryptedPayload,
@@ -502,7 +580,7 @@ class Crypto {
       print(
           '📄 Decrypted payload preview: ${decryptedPayload.substring(0, decryptedPayload.length > 100 ? 100 : decryptedPayload.length)}...');
 
-      // 5. Parse the JSON response
+      // 6. Parse the JSON response
       final responseData = jsonDecode(decryptedPayload) as Map<String, dynamic>;
       print(
           '✅ Successfully parsed JSON response with ${responseData.length} fields');
