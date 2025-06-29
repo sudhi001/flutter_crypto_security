@@ -15,6 +15,7 @@ dependencies:
   encrypt: ^5.0.3
   logger: ^2.5.0
 
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

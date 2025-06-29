@@ -65,19 +65,39 @@ class Crypto {
     if (publicKey == null) {
       throw ArgumentError('Public key is required for encryption');
     }
+    print('🔍 RSA Debug Info:');
+    print('  - Message length: ${message.length}');
+    print('  - Public key modulus length: ${publicKey!.modulus!.bitLength}');
+    print('  - Public key exponent: ${publicKey!.exponent}');
+    print(
+        '  - Message (hex): ${message.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}');
 
-    // For RSA, we don't need block processing for small data like AES keys
-    // RSA can only encrypt data up to (key_size - padding_size) bytes
-    // For 2048-bit key with PKCS1 padding: 256 - 11 = 245 bytes max
     if (message.length > 245) {
       throw ArgumentError('Message too large for RSA encryption');
     }
 
-    final cipher = RSAEngine()
-      ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
+    // Use pure PointyCastle with explicit PKCS1 padding
+    final cipher = RSAEngine();
+    cipher.init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
-    // Direct encryption without block processing - this is correct for RSA
-    return cipher.process(message);
+    // Create PKCS1 v1.5 padding manually
+    final paddedMessage = Uint8List(245);
+    paddedMessage[0] = 0x00; // Leading zero
+    paddedMessage[1] = 0x02; // PKCS1 v1.5 padding type
+
+    // Fill with random non-zero bytes
+    final random = Random.secure();
+    for (int i = 2; i < 245 - message.length - 1; i++) {
+      do {
+        paddedMessage[i] = random.nextInt(256);
+      } while (paddedMessage[i] == 0);
+    }
+
+    paddedMessage[245 - message.length - 1] = 0x00; // Separator
+    paddedMessage.setRange(
+        245 - message.length, 245, message); // Actual message
+
+    return cipher.process(paddedMessage);
   }
 
   /// Encrypts a string message using the RSA public key with PKCS1 padding.
