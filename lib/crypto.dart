@@ -53,6 +53,16 @@ class Crypto {
       throw ArgumentError('Invalid RSA Public Key');
     }
   }
+  Uint8List encryptWithUint8ListPublicKey(Uint8List message) {
+    if (publicKey == null) {
+      throw ArgumentError('Public key is required for encryption');
+    }
+
+    final cipher = RSAEngine()
+      ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
+
+    return _processBlocks(cipher, message);
+  }
 
   /// Encrypts a [message] using the RSA public key.
   ///
@@ -146,7 +156,10 @@ class Crypto {
   /// final (ciphertext, nonce, signature) = Crypto.encryptWithAESandGenerateSignature(key, nonce, plaintext, devicePrivateKeyStr);
   /// ```
   static (String, String, String) encryptWithAESandGenerateSignature(
-      Uint8List key, Uint8List nonce, Uint8List plaintext, String devicePrivateKeyStr) {
+      Uint8List key,
+      Uint8List nonce,
+      Uint8List plaintext,
+      String devicePrivateKeyStr) {
     final gcm = GCMBlockCipher(AESEngine())
       ..init(true, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
@@ -154,9 +167,11 @@ class Crypto {
     final ciphertext = base64Encode(ciphertextBytes);
 
     final signer = RSASigner(Digest('SHA-256'), '0609608648016503040201');
-    final privateKey = Crypto.fromBase64PrivateKey(devicePrivateKeyStr).privateKey!;
+    final privateKey =
+        Crypto.fromBase64PrivateKey(devicePrivateKeyStr).privateKey!;
     signer.init(true, PrivateKeyParameter<RSAPrivateKey>(privateKey));
-    final signature = signer.generateSignature(Uint8List.fromList(ciphertextBytes));
+    final signature =
+        signer.generateSignature(Uint8List.fromList(ciphertextBytes));
 
     final signatureBase64 = base64Encode(signature.bytes);
 
@@ -171,7 +186,8 @@ class Crypto {
   /// ```dart
   /// final (ciphertext, nonce) = Crypto.encryptWithAES(key, nonce, plaintext);
   /// ```
-  static (String, String) encryptWithAES(Uint8List key, Uint8List nonce, Uint8List plaintext) {
+  static (String, String) encryptWithAES(
+      Uint8List key, Uint8List nonce, Uint8List plaintext) {
     final gcm = GCMBlockCipher(AESEngine())
       ..init(true, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
@@ -187,12 +203,14 @@ class Crypto {
   /// ```dart
   /// final plaintext = Crypto.decryptWithAES(key, cipherText, nonceText);
   /// ```
-  static String decryptWithAES(Uint8List key, String cipherText, String nonceText) {
+  static String decryptWithAES(
+      Uint8List key, String cipherText, String nonceText) {
     final ciphertextBytes = base64Decode(cipherText);
     final nonce = base64Decode(nonceText);
 
     final gcm = GCMBlockCipher(AESEngine())
-      ..init(false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
+      ..init(
+          false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
     final plaintextBytes = gcm.process(ciphertextBytes);
 
@@ -222,7 +240,8 @@ class Crypto {
   /// ```dart
   /// final processedBytes = Crypto._processBlocks(cipher, inputBytes);
   /// ```
-  static Uint8List _processBlocks(AsymmetricBlockCipher cipher, Uint8List inputBytes) {
+  static Uint8List _processBlocks(
+      AsymmetricBlockCipher cipher, Uint8List inputBytes) {
     final blockSize = cipher.inputBlockSize;
     final outputBytes = <int>[];
 
