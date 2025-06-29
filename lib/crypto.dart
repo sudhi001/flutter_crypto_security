@@ -405,7 +405,6 @@ class Crypto {
     return jsonData;
   }
 
-
   /// Decrypts a server response using the server's private key
   /// This method decrypts the response that was encrypted by the Go server
   static Map<String, dynamic> decryptResponse(
@@ -417,37 +416,39 @@ class Crypto {
     try {
       // Step 1: Create crypto instance with server's private key
       final crypto = Crypto.fromBase64PrivateKey(serverPrivateKeyBase64);
-      
+
       // Step 2: Decrypt the AES key using RSA private key
       final decryptedAESKeyBytes = crypto.decryptWithPrivateKey(encryptedKey);
-      
+
       // Step 3: Handle base64-encoded AES key (if server sends it that way)
       Uint8List finalAESKey;
       if (decryptedAESKeyBytes.length == 44) {
         // Server sends base64-encoded AES key
-        final decodedKey = base64Decode(String.fromCharCodes(decryptedAESKeyBytes));
+        final decodedKey =
+            base64Decode(String.fromCharCodes(decryptedAESKeyBytes));
         if (decodedKey.length != 32) {
-          throw Exception('Invalid decoded AES key length: ${decodedKey.length}');
+          throw Exception(
+              'Invalid decoded AES key length: ${decodedKey.length}');
         }
         finalAESKey = decodedKey;
       } else if (decryptedAESKeyBytes.length == 32) {
         // Server sends raw AES key
         finalAESKey = decryptedAESKeyBytes;
       } else {
-        throw Exception('Unexpected AES key length: ${decryptedAESKeyBytes.length}');
+        throw Exception(
+            'Unexpected AES key length: ${decryptedAESKeyBytes.length}');
       }
-      
-      
+
       // Step 4: Decrypt the payload using AES with the nonce
-      final decryptedPayload = Crypto.decryptWithAES(
+      final decryptedPayload = Crypto.decryptWithAESGCM(
         finalAESKey,
         encryptedPayload,
         nonce, // This is the base64-encoded nonce string
       );
-      
+
       // Step 5: Parse the JSON response
       final responseData = jsonDecode(decryptedPayload) as Map<String, dynamic>;
-      
+
       return responseData;
     } catch (e) {
       print('Error decrypting server response: $e');
@@ -457,7 +458,7 @@ class Crypto {
 
   /// Decrypts [cipherText] with AES using the provided [key] and [nonceText].
   /// This method properly uses the nonce for AES-GCM decryption.
-  static String decryptWithAES(
+  static String decryptWithAESGCM(
     Uint8List key,
     String cipherText,
     String nonceText, // This should be base64-encoded nonce
@@ -473,7 +474,4 @@ class Crypto {
 
     return String.fromCharCodes(plaintextBytes);
   }
-}
-
-
 }
