@@ -358,7 +358,7 @@ class Crypto {
     return signer.verifySignature(message, RSASignature(signature));
   }
 
-  Future<Map<String, dynamic>> encryptPayload({
+  static Future<Map<String, dynamic>> encryptPayload({
     required String publicKey,
     required Map<String, dynamic> payload,
   }) async {
