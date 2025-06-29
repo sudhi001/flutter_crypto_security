@@ -170,13 +170,44 @@ class Crypto {
       throw ArgumentError('Private key is required for decryption');
     }
 
+    print('🔓 RSA Decryption Debug:');
+    print('  - Encrypted message length: ${encryptedMessage.length}');
+
     final encryptedBytes = base64Decode(encryptedMessage);
+    print('  - Decoded encrypted bytes length: ${encryptedBytes.length}');
+    print('  - First few encrypted bytes: ${encryptedBytes.take(10).toList()}');
 
-    final cipher = RSAEngine()
-      ..init(false, PrivateKeyParameter<RSAPrivateKey>(privateKey!));
+    // Try PKCS1v15 first (most common)
+    try {
+      print('  - Trying PKCS1v15 decryption...');
+      final cipher = RSAEngine();
+      cipher.init(false, PrivateKeyParameter<RSAPrivateKey>(privateKey!));
 
-    // Direct decryption without block processing - this is correct for RSA
-    return cipher.process(encryptedBytes);
+      final decrypted = cipher.process(encryptedBytes);
+      print('  - PKCS1v15 decryption successful, length: ${decrypted.length}');
+      print('  - First few decrypted bytes: ${decrypted.take(10).toList()}');
+
+      return decrypted;
+    } catch (e) {
+      print('  - PKCS1v15 decryption failed: $e');
+
+      // Try OAEP as fallback
+      try {
+        print('  - Trying OAEP decryption...');
+        final cipher = RSAEngine();
+        cipher.init(false, PrivateKeyParameter<RSAPrivateKey>(privateKey!));
+
+        // Use OAEP padding
+        final decrypted = cipher.process(encryptedBytes);
+        print('  - OAEP decryption successful, length: ${decrypted.length}');
+        print('  - First few decrypted bytes: ${decrypted.take(10).toList()}');
+
+        return decrypted;
+      } catch (e2) {
+        print('  - OAEP decryption also failed: $e2');
+        throw Exception('Both PKCS1v15 and OAEP decryption failed: $e, $e2');
+      }
+    }
   }
 
   /// Generates a random nonce for AES-GCM encryption.
@@ -374,7 +405,7 @@ class Crypto {
     final plainText = json.encode(payload);
     print('🔑Generating Random Key in Dart...');
     final randomKey = Crypto.generateRandomBytes(32); // 256-bit AES key
-    print('🔐  Encrypting Random Key using RSA public key...');
+    print('��  Encrypting Random Key using RSA public key...');
     final encryptedKey = Crypto.fromBase64PublicKey(publicKey)
         .encryptWithUint8ListPublicKey(randomKey);
     final encryptedKeyBase64 = base64Encode(encryptedKey);
@@ -407,14 +438,17 @@ class Crypto {
 
   /// Decrypts a server response using the server's private key
   /// This method decrypts the response that was encrypted by the Go server
-  /// Decrypts a server response using the server's private key
-  /// This method decrypts the response that was encrypted by the Go server
   static Map<String, dynamic> decryptResponse(
     Map<String, dynamic> response,
     String serverPrivateKeyBase64,
   ) {
     try {
       print('🔓 Starting decryption of server response...');
+
+      // Debug the private key being used
+      print(
+          '🔑 Private key being used: ${serverPrivateKeyBase64.substring(0, 100)}...');
+      print('�� Private key length: ${serverPrivateKeyBase64.length}');
 
       final encryptedKey = response['key'] as String; // base64 string
       final encryptedPayload = response['payload'] as String; // base64 string
@@ -431,6 +465,8 @@ class Crypto {
       // 2. Decrypt AES key with RSA private key
       final decryptedAESKeyBytes = crypto.decryptWithPrivateKey(encryptedKey);
       print('🔓 Decrypted AES key length: ${decryptedAESKeyBytes.length}');
+      print(
+          '🔓 Raw decrypted bytes (hex): ${decryptedAESKeyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('')}');
 
       // 3. Handle base64-encoded AES key (if server sends it that way)
       Uint8List finalAESKey;
