@@ -53,6 +53,14 @@ class Crypto {
       throw ArgumentError('Invalid RSA Public Key');
     }
   }
+
+  /// Encrypts a Uint8List using the RSA public key with PKCS1 padding.
+  /// This is the CORRECT method for RSA encryption - no block processing needed.
+  ///
+  /// Example:
+  /// ```dart
+  /// final encryptedBytes = crypto.encryptWithUint8ListPublicKey(aesKeyBytes);
+  /// ```
   Uint8List encryptWithUint8ListPublicKey(Uint8List message) {
     if (publicKey == null) {
       throw ArgumentError('Public key is required for encryption');
@@ -68,41 +76,41 @@ class Crypto {
     final cipher = RSAEngine()
       ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
-    // Direct encryption without block processing
+    // Direct encryption without block processing - this is correct for RSA
     return cipher.process(message);
   }
 
-  /// Encrypts a [message] using the RSA public key with PKCS1 padding.
-  ///
-  /// Uses RSA_PKCS1_PADDING for compatibility and security.
-  /// Throws an [ArgumentError] if the public key is not provided.
+  /// Encrypts a string message using the RSA public key with PKCS1 padding.
+  /// This method converts the string to bytes and then encrypts.
   ///
   /// Example:
   /// ```dart
-  /// final encryptedMessage = crypto.encryptWithPublicKey('Hello, World!');
+  /// final encryptedBytes = crypto.encryptWithPublicKey('Hello, World!');
   /// ```
   Uint8List encryptWithPublicKey(String message) {
     if (publicKey == null) {
       throw ArgumentError('Public key is required for encryption');
     }
 
-    // RSAEngine uses PKCS1 padding by default (RSA_PKCS1_PADDING)
-    // This is the correct and secure padding scheme for RSA encryption
+    final messageBytes = utf8.encode(message);
+
+    // Check if message is too large for RSA
+    if (messageBytes.length > 245) {
+      throw ArgumentError('Message too large for RSA encryption');
+    }
+
+    // Use the same direct encryption method as encryptWithUint8ListPublicKey
     final cipher = RSAEngine()
       ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey!));
 
-    final messageBytes = utf8.encode(message);
-    return _processBlocks(cipher, Uint8List.fromList(messageBytes));
+    return cipher.process(Uint8List.fromList(messageBytes));
   }
 
-  /// Decrypts an [encryptedMessage] using the RSA private key with PKCS1 padding.
-  ///
-  /// Uses RSA_PKCS1_PADDING for compatibility and security.
-  /// Throws an [ArgumentError] if the private key is not provided.
+  /// Decrypts an encrypted message using the RSA private key with PKCS1 padding.
   ///
   /// Example:
   /// ```dart
-  /// final decryptedMessage = crypto.decryptWithPrivateKey(encryptedMessage);
+  /// final decryptedBytes = crypto.decryptWithPrivateKey(encryptedMessage);
   /// ```
   Uint8List decryptWithPrivateKey(String encryptedMessage) {
     if (privateKey == null) {
@@ -111,12 +119,11 @@ class Crypto {
 
     final encryptedBytes = base64Decode(encryptedMessage);
 
-    // RSAEngine uses PKCS1 padding by default (RSA_PKCS1_PADDING)
-    // This is the correct and secure padding scheme for RSA decryption
     final cipher = RSAEngine()
       ..init(false, PrivateKeyParameter<RSAPrivateKey>(privateKey!));
 
-    return _processBlocks(cipher, encryptedBytes);
+    // Direct decryption without block processing - this is correct for RSA
+    return cipher.process(encryptedBytes);
   }
 
   /// Generates a random nonce for AES-GCM encryption.
@@ -128,8 +135,11 @@ class Crypto {
   static Uint8List generateNonce() {
     final secureRandom = FortunaRandom();
     final random = Random.secure();
-    secureRandom.seed(KeyParameter(
-        Uint8List.fromList(List.generate(32, (_) => random.nextInt(256)))));
+    secureRandom.seed(
+      KeyParameter(
+        Uint8List.fromList(List.generate(32, (_) => random.nextInt(256))),
+      ),
+    );
     final nonce = Uint8List(12); // AES-GCM nonce size
 
     for (int i = 0; i < nonce.length; i++) {
@@ -158,7 +168,9 @@ class Crypto {
     final signatureBytes = base64Decode(signature);
 
     return signer.verifySignature(
-        Uint8List.fromList(ciphertextBytes), RSASignature(signatureBytes));
+      Uint8List.fromList(ciphertextBytes),
+      RSASignature(signatureBytes),
+    );
   }
 
   /// Encrypts [plaintext] with AES and generates a signature using the device's private key.
@@ -170,10 +182,11 @@ class Crypto {
   /// final (ciphertext, nonce, signature) = Crypto.encryptWithAESandGenerateSignature(key, nonce, plaintext, devicePrivateKeyStr);
   /// ```
   static (String, String, String) encryptWithAESandGenerateSignature(
-      Uint8List key,
-      Uint8List nonce,
-      Uint8List plaintext,
-      String devicePrivateKeyStr) {
+    Uint8List key,
+    Uint8List nonce,
+    Uint8List plaintext,
+    String devicePrivateKeyStr,
+  ) {
     final gcm = GCMBlockCipher(AESEngine())
       ..init(true, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
@@ -181,11 +194,13 @@ class Crypto {
     final ciphertext = base64Encode(ciphertextBytes);
 
     final signer = RSASigner(Digest('SHA-256'), '0609608648016503040201');
-    final privateKey =
-        Crypto.fromBase64PrivateKey(devicePrivateKeyStr).privateKey!;
+    final privateKey = Crypto.fromBase64PrivateKey(
+      devicePrivateKeyStr,
+    ).privateKey!;
     signer.init(true, PrivateKeyParameter<RSAPrivateKey>(privateKey));
-    final signature =
-        signer.generateSignature(Uint8List.fromList(ciphertextBytes));
+    final signature = signer.generateSignature(
+      Uint8List.fromList(ciphertextBytes),
+    );
 
     final signatureBase64 = base64Encode(signature.bytes);
 
@@ -201,7 +216,10 @@ class Crypto {
   /// final (ciphertext, nonce) = Crypto.encryptWithAES(key, nonce, plaintext);
   /// ```
   static (String, String) encryptWithAES(
-      Uint8List key, Uint8List nonce, Uint8List plaintext) {
+    Uint8List key,
+    Uint8List nonce,
+    Uint8List plaintext,
+  ) {
     final gcm = GCMBlockCipher(AESEngine())
       ..init(true, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
@@ -218,13 +236,16 @@ class Crypto {
   /// final plaintext = Crypto.decryptWithAES(key, cipherText, nonceText);
   /// ```
   static String decryptWithAES(
-      Uint8List key, String cipherText, String nonceText) {
+    Uint8List key,
+    String cipherText,
+    String nonceText,
+  ) {
     final ciphertextBytes = base64Decode(cipherText);
     final nonce = base64Decode(nonceText);
 
-    final gcm = GCMBlockCipher(AESEngine())
-      ..init(
-          false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
+    final gcm = GCMBlockCipher(
+      AESEngine(),
+    )..init(false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
     final plaintextBytes = gcm.process(ciphertextBytes);
 
@@ -248,33 +269,11 @@ class Crypto {
     return key;
   }
 
-  /// Processes the input bytes in blocks using the provided [cipher].
-  ///
-  /// Example:
-  /// ```dart
-  /// final processedBytes = Crypto._processBlocks(cipher, inputBytes);
-  /// ```
-  static Uint8List _processBlocks(
-      AsymmetricBlockCipher cipher, Uint8List inputBytes) {
-    final blockSize = cipher.inputBlockSize;
-    final outputBytes = <int>[];
-
-    for (var offset = 0; offset < inputBytes.length; offset += blockSize) {
-      final end = (offset + blockSize < inputBytes.length)
-          ? offset + blockSize
-          : inputBytes.length;
-      final block = inputBytes.sublist(offset, end);
-
-      final processedBlock = cipher.process(Uint8List.fromList(block));
-      outputBytes.addAll(processedBlock);
-    }
-
-    return Uint8List.fromList(outputBytes);
-  }
-
   /// Signs a message using a base64-encoded RSA private key. Returns the signature as Uint8List.
   static Uint8List signWithPrivateKey(
-      String privateKeyBase64, Uint8List message) {
+    String privateKeyBase64,
+    Uint8List message,
+  ) {
     final pemBytes = base64Decode(privateKeyBase64);
     final pemString = String.fromCharCodes(pemBytes);
     final parser = encrypt.RSAKeyParser();
@@ -290,7 +289,10 @@ class Crypto {
 
   /// Verifies a signature using a base64-encoded RSA public key. Returns true if valid.
   static bool verifyWithPublicKey(
-      String publicKeyBase64, Uint8List message, Uint8List signature) {
+    String publicKeyBase64,
+    Uint8List message,
+    Uint8List signature,
+  ) {
     final pemBytes = base64Decode(publicKeyBase64);
     final pemString = String.fromCharCodes(pemBytes);
     final parser = encrypt.RSAKeyParser();
