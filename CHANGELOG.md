@@ -1,3 +1,14 @@
+## 0.2.0
+
+* `CryptoV2`: envelope v2 (X25519 + HKDF-SHA256 + AES-256-GCM, Ed25519
+  signature) with `generateX25519KeyPair`, `generateEd25519KeyPair`,
+  `signEd25519`/`verifyEd25519`, `encryptEnvelope`/`decryptEnvelope`,
+  `encryptPayload`/`decryptResponse`. Built on the `cryptography` package;
+  add `cryptography_flutter` in apps for native speed.
+* `Crypto.encryptEnvelopeWithKeys` / `decryptEnvelopeWithKeys` and
+  `Crypto.signBytes` — reuse parsed keys (~25% faster envelopes).
+* Benchmark rows for cached keys and v2.
+
 ## 0.1.0
 
 Interoperability release — the wire format is now shared and cross-tested with

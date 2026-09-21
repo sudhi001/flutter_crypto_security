@@ -257,8 +257,13 @@ class Crypto {
   static Uint8List signWithPrivateKey(
     String privateKeyBase64,
     Uint8List message,
-  ) {
-    final key = Crypto.fromBase64PrivateKey(privateKeyBase64).privateKey!;
+  ) =>
+      Crypto.fromBase64PrivateKey(privateKeyBase64).signBytes(message);
+
+  /// Signs [message] (RSASSA-PKCS1-v1_5 / SHA-256) with this instance's
+  /// private key and returns the raw signature bytes.
+  Uint8List signBytes(Uint8List message) {
+    final key = _requirePrivateKey('signing');
     final signer = Signer('SHA-256/RSA')
       ..init(true, PrivateKeyParameter<RSAPrivateKey>(key));
     return (signer.generateSignature(message) as RSASignature).bytes;
@@ -326,11 +331,30 @@ class Crypto {
     String? senderPrivateKey,
     bool oaep = false,
   }) {
+    return encryptEnvelopeWithKeys(
+      recipient: Crypto.fromBase64PublicKey(recipientPublicKey),
+      payload: payload,
+      signer: senderPrivateKey == null
+          ? null
+          : Crypto.fromBase64PrivateKey(senderPrivateKey),
+      oaep: oaep,
+    );
+  }
+
+  /// [encryptEnvelope] for already parsed keys: [recipient] must hold a
+  /// public key, [signer] (optional) a private key. Parse keys once with
+  /// [Crypto.fromBase64PublicKey] / [Crypto.fromBase64PrivateKey] and reuse
+  /// them in hot paths.
+  static Map<String, String> encryptEnvelopeWithKeys({
+    required Crypto recipient,
+    required Uint8List payload,
+    Crypto? signer,
+    bool oaep = false,
+  }) {
     final aesKey = generateRandomBytes(aesKeySize);
     final nonce = generateNonce();
     final ciphertext = encryptWithAESBytes(aesKey, nonce, payload);
 
-    final recipient = Crypto.fromBase64PublicKey(recipientPublicKey);
     final encryptedKey = oaep
         ? recipient.encryptWithPublicKeyOAEP(aesKey)
         : recipient.encryptWithUint8ListPublicKey(aesKey);
@@ -340,8 +364,8 @@ class Crypto {
       'key': base64Encode(encryptedKey),
       'nonce': base64Encode(nonce),
     };
-    if (senderPrivateKey != null) {
-      envelope['signature'] = sign(senderPrivateKey, ciphertext);
+    if (signer != null) {
+      envelope['signature'] = base64Encode(signer.signBytes(ciphertext));
     }
     _log('Envelope built: ${ciphertext.length} ciphertext bytes');
     return envelope;
@@ -362,6 +386,25 @@ class Crypto {
     String? senderPublicKey,
     bool oaep = false,
   }) {
+    return decryptEnvelopeWithKeys(
+      recipient: Crypto.fromBase64PrivateKey(recipientPrivateKey),
+      envelope: envelope,
+      sender: senderPublicKey == null
+          ? null
+          : Crypto.fromBase64PublicKey(senderPublicKey),
+      oaep: oaep,
+    );
+  }
+
+  /// [decryptEnvelope] for already parsed keys: [recipient] must hold a
+  /// private key, [sender] (optional) the public key the signature must
+  /// verify with.
+  static Uint8List decryptEnvelopeWithKeys({
+    required Crypto recipient,
+    required Map<String, dynamic> envelope,
+    Crypto? sender,
+    bool oaep = false,
+  }) {
     final encryptedKey = _field(envelope, 'key');
     final payload = _field(envelope, 'payload');
     final nonceText = _field(envelope, 'nonce');
@@ -372,17 +415,16 @@ class Crypto {
     final ciphertext = _b64(payload, 'payload');
     final nonce = _b64(nonceText, 'nonce');
 
-    if (senderPublicKey != null) {
+    if (sender != null) {
       final signature = _field(envelope, 'signature');
       if (signature == null) {
         throw ArgumentError('Envelope has no signature');
       }
-      if (!verify(senderPublicKey, ciphertext, signature)) {
+      if (!sender.verifySignature(payload, signature)) {
         throw StateError('Envelope signature verification failed');
       }
     }
 
-    final recipient = Crypto.fromBase64PrivateKey(recipientPrivateKey);
     final rawKey = oaep
         ? recipient.decryptWithPrivateKeyOAEP(encryptedKey)
         : recipient.decryptWithPrivateKey(encryptedKey);

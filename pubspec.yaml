@@ -1,6 +1,6 @@
 name: flutter_crypto_security
 description: "RSA + AES-GCM encryption, signing and hybrid envelopes, interoperable with the Go crypto_utils package and Rust crate."
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 homepage: "https://github.com/sudhi001/flutter_crypto_security"  # Add the URL of your package homepage, like a GitHub repo.
 
@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   pointycastle: ^4.0.0
+  cryptography: ^2.9.0
 
 
 dev_dependencies:

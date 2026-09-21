@@ -278,6 +278,48 @@ void main() {
           equals(payload));
     });
 
+    test('key-object variants interoperate with string variants', () {
+      final (devicePriv, devicePub) = Crypto.generateRSAKeyPair();
+      final server = Crypto.fromBase64PrivateKey(serverPrivateKey);
+      final serverPub = Crypto.fromBase64PublicKey(serverPublicKey);
+      final device = Crypto.fromBase64PrivateKey(devicePriv);
+      final devicePubKey = Crypto.fromBase64PublicKey(devicePub);
+      final payload = utf8Bytes('keys variant');
+
+      for (final oaep in [false, true]) {
+        final env = Crypto.encryptEnvelopeWithKeys(
+            recipient: serverPub, payload: payload, signer: device, oaep: oaep);
+        expect(
+            Crypto.decryptEnvelope(
+                recipientPrivateKey: serverPrivateKey,
+                envelope: env,
+                senderPublicKey: devicePub,
+                oaep: oaep),
+            equals(payload));
+
+        final env2 = Crypto.encryptEnvelope(
+            recipientPublicKey: serverPublicKey,
+            payload: payload,
+            senderPrivateKey: devicePriv,
+            oaep: oaep);
+        expect(
+            Crypto.decryptEnvelopeWithKeys(
+                recipient: server,
+                envelope: env2,
+                sender: devicePubKey,
+                oaep: oaep),
+            equals(payload));
+        expect(
+            () => Crypto.decryptEnvelopeWithKeys(
+                recipient: server,
+                envelope: env2,
+                sender: serverPub,
+                oaep: oaep),
+            throwsStateError);
+      }
+      expect(() => serverPub.signBytes(payload), throwsArgumentError);
+    });
+
     test('OAEP envelope round trip', () {
       final payload = utf8Bytes('oaep payload');
       final envelope = Crypto.encryptEnvelope(

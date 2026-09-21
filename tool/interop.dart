@@ -10,22 +10,25 @@
 //   verify      <pub> <in> <sig_b64>
 //   aes-encrypt <key_b64_file> <in> <out_json>
 //   aes-decrypt <key_b64_file> <in_json> <out>
+//   keygen-v2   <x25519_priv_out> <x25519_pub_out> <ed25519_priv_out> <ed25519_pub_out>
+//   encrypt-v2  <recipient_x25519_pub> <sender_ed25519_priv|-> <in> <out_json>
+//   decrypt-v2  <recipient_x25519_priv> <sender_ed25519_pub|-> <in_json> <out>
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_crypto_security/flutter_crypto_security.dart';
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   try {
-    run(args);
+    await run(args);
   } catch (e) {
     stderr.writeln('error: $e');
     exit(1);
   }
 }
 
-void run(List<String> args) {
+Future<void> run(List<String> args) async {
   if (args.isEmpty) {
     throw ArgumentError('missing sub-command');
   }
@@ -113,6 +116,37 @@ void run(List<String> args) {
         base64Decode(input['ciphertext'] as String),
       );
       File(a[2]).writeAsBytesSync(plaintext);
+
+    case 'keygen-v2':
+      need(a, 4);
+      final (xPriv, xPub) = await CryptoV2.generateX25519KeyPair();
+      final (edPriv, edPub) = await CryptoV2.generateEd25519KeyPair();
+      File(a[0]).writeAsStringSync(xPriv);
+      File(a[1]).writeAsStringSync(xPub);
+      File(a[2]).writeAsStringSync(edPriv);
+      File(a[3]).writeAsStringSync(edPub);
+
+    case 'encrypt-v2':
+      need(a, 4);
+      final envelope = await CryptoV2.encryptEnvelope(
+        recipientX25519PublicKey: readKey(a[0]),
+        senderEd25519PrivateKey: optionalKey(a[1]),
+        payload: readBytes(a[2]),
+      );
+      File(a[3]).writeAsStringSync(
+        const JsonEncoder.withIndent('  ').convert(envelope),
+      );
+
+    case 'decrypt-v2':
+      need(a, 4);
+      final envelope =
+          jsonDecode(File(a[2]).readAsStringSync()) as Map<String, dynamic>;
+      final plaintext = await CryptoV2.decryptEnvelope(
+        recipientX25519PrivateKey: readKey(a[0]),
+        senderEd25519PublicKey: optionalKey(a[1]),
+        envelope: envelope,
+      );
+      File(a[3]).writeAsBytesSync(plaintext);
 
     default:
       throw ArgumentError('unknown sub-command "$cmd"');
