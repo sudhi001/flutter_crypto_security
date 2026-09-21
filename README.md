@@ -1,188 +1,162 @@
 # flutter_crypto_security
 
-A Flutter package for encryption and decryption of data using RSA and AES algorithms, with built-in signature verification. It provides utilities for secure communication and data protection.
+Encrypt, sign and exchange data between a Flutter app and a Go or Rust
+backend — with one wire format that all three understand.
 
-## Features
+This package is the **app-side** half of the toolkit:
 
-- **AES Encryption/Decryption:** Encrypt and decrypt data with AES, including signature generation and verification.
-- **RSA Encryption/Decryption:** Encrypt and decrypt AES keys using RSA public and private keys with PKCS1 padding.
-- **Signature Verification:** Verify data integrity using RSA signatures.
-- **Logging and Debugging:** Includes detailed logs to help you track encryption and decryption processes.
-- **PKCS1 Padding:** Uses RSA_PKCS1_PADDING for secure and compatible RSA operations.
+| Implementation | Repository |
+|---|---|
+| Dart / Flutter (this package) | `flutter_crypto_security` |
+| Go | [`crypto_utils`](https://github.com/sudhi001/crypto_utils) |
+| Rust | `crypto_utils_rust` |
 
-## Security Features
+All three are cross-tested against each other (123 checks in `interop/run.sh`)
+and against a real envelope captured from production.
 
-- **RSA Padding Scheme:** Uses PKCS1 padding (RSA_PKCS1_PADDING) for RSA encryption/decryption
-- **AES-GCM Mode:** Uses AES in GCM mode for authenticated encryption
-- **Digital Signatures:** RSA-SHA256 signatures for message authentication
-- **Secure Random Generation:** Cryptographically secure random number generation for keys and nonces
+## What it does, in plain English
 
-Here's an updated **Installation** section for your `README.md` based on the package location:
+Think of sending a valuable letter:
+
+1. The letter goes in a **steel box locked with a fresh padlock key** — that is
+   AES-256-GCM, fast and tamper-evident.
+2. The padlock key is far too sensitive to mail in the open, so it is snapped
+   into a **tiny box that only the server can open** — RSA with the server's
+   public key.
+3. Optionally you press your **wax seal** on the parcel so the server knows it
+   really came from this device — an RSA signature.
+4. Everything ships as one small JSON **envelope**:
+
+```json
+{ "payload": "…locked box…", "key": "…tiny box…", "nonce": "…fresh-start number…", "signature": "…wax seal…" }
+```
+
+`Crypto.encryptPayload` builds that parcel for the server; `Crypto.decryptResponse`
+opens the server's reply. Everything else in the package is the individual
+tools those two use. A longer explanation with a glossary lives in
+`interop/PLAIN_ENGLISH.md`.
 
 ## Installation
 
-To use `flutter_crypto_security` in your Flutter project, follow these steps:
-
-1. Add the following dependency in your `pubspec.yaml` file:
-
-   ```yaml
-   dependencies:
-     flutter_crypto_security:
-       git:
-         url: https://github.com/sudhi001/flutter_crypto_security.git
-   ```
-
-2. Install the package by running:
-
-   ```bash
-   flutter pub get
-   ```
-
-3. You can now use the package in your Flutter project by importing it:
-
-   ```dart
-   import 'package:flutter_crypto_security/flutter_crypto_security.dart';
-   ```
-
-
-## Usage
-
-This package supports both **AES** and **RSA** encryption. Below are examples demonstrating how to use each feature.
-
-### AES Encryption and Decryption
+```yaml
+dependencies:
+  flutter_crypto_security:
+    git:
+      url: https://github.com/sudhi001/flutter_crypto_security.git
+```
 
 ```dart
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter_crypto_security/flutter_crypto_security.dart';
-import 'package:logger/logger.dart';
-
-final logger = Logger();
-
-void main() {
-  final plaintext = '{"Code":"172","Amount":100.0,"Currency":"INR"}';
-  final key = Crypto.generateRandomBytes(32); // 128-bit key
-  final nonce = Crypto.generateNonce();
-  
-  // Encrypt with AES
-  final encryptedAES = Crypto.encryptWithAES(key, nonce, Uint8List.fromList(utf8.encode(plaintext)));
-  logger.d('Encrypted AES: ${encryptedAES.$1}'); // Debug log for encrypted data
-
-  // Decrypt with AES
-  final decryptedAES = Crypto.decryptWithAES(key, encryptedAES.$1, encryptedAES.$2);
-  logger.d('Decrypted AES: $decryptedAES'); // Debug log for decrypted data
-
-  // Ensure the decrypted message matches the original plaintext
-  assert(decryptedAES == plaintext);
-}
 ```
 
-### AES Encryption with Signature
+Pure Dart (only `pointycastle`), so it also works on web and desktop.
+
+## Quick start
 
 ```dart
-void main() {
-  final plaintext = '{"Code":"172","Amount":100.0,"Currency":"INR"}';
-  final key = Crypto.generateRandomBytes(32); // 128-bit key
-  final nonce = Crypto.generateNonce();
-  final devicePrivateKeyStr = "YOUR_PRIVATE_KEY_HERE"; // Replace with your private key
-  
-  // Encrypt with AES and generate signature
-  final encryptedAES = Crypto.encryptWithAESandGenerateSignature(
-    key,
-    nonce,
-    Uint8List.fromList(utf8.encode(plaintext)),
-    devicePrivateKeyStr,
-  );
-  logger.d('Encrypted AES: ${encryptedAES.$1}');
-  logger.d('Signature: ${encryptedAES.$3}');
+// Request → server
+final body = await Crypto.encryptPayload(
+  publicKey: serverPublicKey,               // base64 PEM string from the API
+  payload: {'Code': '172', 'Amount': 100.0},
+  senderPrivateKey: devicePrivateKey,       // optional: adds "signature"
+);
+// POST jsonEncode(body) …
 
-  // Decrypt with AES
-  final decryptedAES = Crypto.decryptWithAES(key, encryptedAES.$1, encryptedAES.$2);
-  logger.d('Decrypted AES: $decryptedAES');
-
-  // Ensure the decrypted message matches the original plaintext
-  assert(decryptedAES == plaintext);
-
-  // Verify signature with public key
-  bool isVerified = Crypto.fromBase64PublicKey("YOUR_PUBLIC_KEY_HERE") // Replace with your public key
-      .verifySignature(encryptedAES.$1, encryptedAES.$3);
-  assert(isVerified == true);
-}
+// Server → response
+final data = Crypto.decryptResponse(
+  responseJson,                             // {"payload","key","nonce"[,"signature"]}
+  devicePrivateKey,
+  senderPublicKey: serverPublicKey,         // optional: signature becomes mandatory
+);
 ```
 
-### RSA Encryption/Decryption with PKCS1 Padding
+Byte-level equivalents with an `oaep: true` switch: `Crypto.encryptEnvelope(...)`
+and `Crypto.decryptEnvelope(...)`.
 
-#### RSA Encryption with Public Key and Decryption with Private Key:
+### Individual tools
 
 ```dart
-void main() {
-  final symmetricKey = Crypto.generateRandomBytes(32); // 128-bit key
-  final plaintext = base64Encode(symmetricKey);
-  final devicePublicKeyStr = "YOUR_PUBLIC_KEY_HERE"; // Replace with your public key
-  final devicePrivateKeyStr = "YOUR_PRIVATE_KEY_HERE"; // Replace with your private key
-  
-  // Encrypt with public key using PKCS1 padding
-  final encryptedMessage = Crypto.fromBase64PublicKey(devicePublicKeyStr)
-      .encryptWithPublicKey(plaintext);
-  final encryptedBase64 = base64Encode(encryptedMessage);
-  logger.d('Encrypted message (Base64): $encryptedBase64');
+// Keys (same base64-PEM strings the Go backend uses)
+final (privateKey, publicKey) = Crypto.generateRSAKeyPair();
 
-  // Decrypt with private key using PKCS1 padding
-  final decrypted = Crypto.fromBase64PrivateKey(devicePrivateKeyStr)
-      .decryptWithPrivateKey(encryptedBase64);
-  final decryptedText = String.fromCharCodes(decrypted);
-  logger.d('Decrypted message: $decryptedText');
+// RSA
+final pub = Crypto.fromBase64PublicKey(publicKey);
+final priv = Crypto.fromBase64PrivateKey(privateKey);
+final ct = pub.encryptWithUint8ListPublicKey(bytes);          // PKCS#1 v1.5
+final pt = priv.decryptWithPrivateKey(base64Encode(ct));
+final ct2 = pub.encryptWithPublicKeyOAEP(bytes);              // OAEP-SHA256
+final pt2 = priv.decryptWithPrivateKeyOAEP(base64Encode(ct2));
 
-  // Ensure the decrypted message matches the original plaintext
-  assert(decryptedText == plaintext);
-}
+// AES-256-GCM
+final key = Crypto.generateRandomBytes(32);
+final nonce = Crypto.generateNonce();
+final (ciphertext, nonceB64) = Crypto.encryptWithAES(key, nonce, utf8Bytes);
+final plaintext = Crypto.decryptWithAES(key, ciphertext, nonceB64); // String
+
+// Signatures
+final sig = Crypto.sign(privateKey, message);                 // base64
+final ok = Crypto.verify(publicKey, message, sig);
+final (ct3, nonce3, sig3) =
+    Crypto.encryptWithAESandGenerateSignature(key, nonce, plaintext, privateKey);
+final valid = Crypto.fromBase64PublicKey(publicKey).verifySignature(ct3, sig3);
+
+// Logging (silent by default)
+Crypto.logger = print;
 ```
 
-### Testing for AES Decryption Failure with Wrong Key:
+Lower-level classes are exported too: `AesGcm` (fast AES-GCM) and
+`RsaKeyCodec` (PEM/DER key encoding).
 
-```dart
-void main() {
-  final plaintext = '{"Code":"172","Amount":100.0,"Currency":"INR"}';
-  final key = Crypto.generateRandomBytes(32); // 128-bit key
-  final wrongKey = Crypto.generateRandomBytes(32); // 128-bit key
+## Compatibility
 
-  try {
-    final nonce = Crypto.generateNonce();
-    // Encrypt with AES using the correct key
-    final encryptedAES = Crypto.encryptWithAES(
-        key, nonce, Uint8List.fromList(utf8.encode(plaintext)));
-    logger.d('Encrypted AES: ${encryptedAES.$1}');
+* Field names in envelopes are matched case-insensitively, so replies from
+  older Go servers (`Payload`/`Key`/`Nonce`) open fine.
+* Envelopes whose RSA block holds the base64 *text* of the AES key (what this
+  package produced before 0.1.0) are still accepted when decrypting.
+* Wire format details: `interop/PROTOCOL.md`.
 
-    // Try to decrypt with a wrong key and ensure it fails
-    Crypto.decryptWithAES(wrongKey, encryptedAES.$1, encryptedAES.$2);
-    throw Exception('Decryption should fail with the wrong key');
-  } catch (e) {
-    logger.e('Decryption failed as expected with wrong key');
-  }
-}
+## Performance
+
+Dart is the slowest of the three (pure-Dart big-number and AES code, no
+hardware acceleration) but comfortably fast for app traffic: a typical
+1 KiB request is encrypted and signed in ~3.5 ms on an Apple M4.
+
+Version 0.1.0 replaced PointyCastle's AES-GCM with a table-based GHASH
+(`AesGcm`), taking 1 MiB from **1.29 s down to 0.09 s** (14× faster) while
+staying bit-for-bit compatible (NIST vectors, PointyCastle and the Go/Rust
+suites all agree).
+
+Mean time per operation on Apple M4 (Darwin). Lower is better.
+RSA rows include base64 + PEM parsing of the key on every call, as callers pay it.
+
+| Operation | Go | Rust | Dart (AOT) |
+|---|---:|---:|---:|
+| RSA-2048 key pair generation | 67.92 ms | 158.42 ms | 304.99 ms |
+| RSA encrypt, PKCS#1 v1.5 (32-byte AES key) | 44.9 µs | 174.8 µs | 188.3 µs |
+| RSA decrypt, PKCS#1 v1.5 | 1.56 ms | 1.42 ms | 3.11 ms |
+| RSA encrypt, OAEP-SHA256 | 45.9 µs | 177.3 µs | 216.0 µs |
+| RSA decrypt, OAEP-SHA256 | 1.56 ms | 1.42 ms | 3.10 ms |
+| AES-256-GCM encrypt, 1 KiB | 2.1 µs | 2.8 µs | 95.6 µs |
+| AES-256-GCM decrypt, 1 KiB | 1.6 µs | 1.4 µs | 96.4 µs |
+| AES-256-GCM encrypt, 1 MiB | 1.01 ms (1043 MB/s) | 848.5 µs (1236 MB/s) | 90.83 ms (12 MB/s) |
+| AES-256-GCM decrypt, 1 MiB | 947.7 µs (1106 MB/s) | 849.7 µs (1234 MB/s) | 92.57 ms (11 MB/s) |
+| Sign (RSA-SHA256), 1 KiB | 1.58 ms | 1.42 ms | 3.31 ms |
+| Verify (RSA-SHA256), 1 KiB | 45.0 µs | 176.9 µs | 226.0 µs |
+| Envelope encrypt + sign, 1 KiB | 1.62 ms | 1.60 ms | 3.40 ms |
+| Envelope verify + decrypt, 1 KiB | 1.60 ms | 1.59 ms | 3.53 ms |
+
+Reproduce with `dart compile exe benchmark/bench.dart -o bench && ./bench`
+(AOT, like a Flutter release build) or, for all three languages at once,
+`interop/bench.sh`.
+
+## Testing
+
+```bash
+flutter test               # unit tests, incl. NIST GCM vectors and a captured production envelope
+../interop/run.sh          # cross-language interoperability suite
+dart run tool/interop.dart # the CLI used by the suite
 ```
-
-## Tests
-
-This package includes comprehensive tests for both **AES** and **RSA** encryption and decryption processes:
-
-- **Test AES Encryption and Decryption:** Ensures AES encryption and decryption works with the correct key.
-- **Test RSA Encryption with Public Key and Decryption with Private Key:** Verifies that RSA encryption with a public key and decryption with a private key works as expected using PKCS1 padding.
-- **Test AES with Signature:** Validates AES encryption with a signature and verifies the signature with the public key.
-- **Test AES Decryption Failure with Wrong Key:** Ensures AES decryption fails with the wrong key.
-- **Test RSA PKCS1 Padding Compatibility:** Verifies that RSA operations use PKCS1 padding correctly.
-
-## RSA Padding Scheme
-
-This package uses **PKCS1 padding** (RSA_PKCS1_PADDING) for all RSA encryption and decryption operations. This is:
-
-- **Secure:** Provides protection against various cryptographic attacks
-- **Compatible:** Widely supported across different platforms and libraries
-- **Standard:** Follows the PKCS#1 v1.5 standard for RSA encryption
-
-The implementation uses PointyCastle's `RSAEngine` which defaults to PKCS1 padding, ensuring secure and compatible RSA operations.
 
 ## License
 
-MIT License. See the [LICENSE](LICENSE) file for details.
-
+MIT — see [LICENSE](LICENSE).
